@@ -1,0 +1,84 @@
+local player = game.Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function attackNearestMonster(partName)
+    while true do
+        local closestMonster = nil
+        local closestDistance = math.huge
+        local character = player.Character
+        local playerRoot = character and character:FindFirstChild("HumanoidRootPart")
+
+        if playerRoot then
+            for _, monster in ipairs(workspace:GetChildren()) do
+                if monster:IsA("Model") and monster ~= character and monster:FindFirstChild(partName) then
+                    local monsterRoot = monster:FindFirstChild(partName)
+                    if monsterRoot then
+                        local distance = (playerRoot.Position - monsterRoot.Position).Magnitude
+                        if distance < closestDistance then
+                            closestDistance = distance
+                            closestMonster = monsterRoot
+                        end
+                    end
+                end
+            end
+
+            -- 2. ถ้าเจอเป้าหมายในระยะ 20 หน่วย
+            if closestMonster and closestDistance <= 20 then
+                -- ค้นหาอาวุธทั้งหมดใน Backpack (กระเป๋า)
+                for _, weapon in ipairs(player.Backpack:GetChildren()) do
+                    if weapon:IsA("Tool") then
+                        local args = {
+                            [1] = weapon,
+                            [2] = closestMonster
+                        }
+                        -- ส่งคำสั่งตี (MeleeHit)
+                        if ReplicatedStorage.Remotes:FindFirstChild("MeleeHit") then
+                            ReplicatedStorage.Remotes.MeleeHit:FireServer(unpack(args))
+                        end
+                    end
+                end
+                
+                -- เช็กอาวุธที่อาจจะถืออยู่ในมือด้วย (เผื่อใส่ไว้)
+                if character:FindFirstChildWhichIsA("Tool") then
+                    local equippedWeapon = character:FindFirstChildWhichIsA("Tool")
+                    local args = {
+                        [1] = equippedWeapon,
+                        [2] = closestMonster
+                    }
+                    ReplicatedStorage.Remotes.MeleeHit:FireServer(unpack(args))
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end
+
+-- ฟังก์ชันสำหรับสั่ง "เหวี่ยง" อาวุธทุกชิ้นพร้อมกัน (MeleeAttacked)
+local function attackContinuously()
+    while true do
+        -- วนลูปใช้อาวุธทุกชิ้นที่มีในกระเป๋า
+        for _, weapon in ipairs(player.Backpack:GetChildren()) do
+            if weapon:IsA("Tool") then
+                local args = {
+                    [1] = weapon,
+                    [2] = 1
+                }
+                if ReplicatedStorage.Remotes:FindFirstChild("MeleeAttacked") then
+                    ReplicatedStorage.Remotes.MeleeAttacked:FireServer(unpack(args))
+                end
+            end
+        end
+        
+        -- และชิ้นที่ถืออยู่
+        local equipped = player.Character and player.Character:FindFirstChildWhichIsA("Tool")
+        if equipped then
+            ReplicatedStorage.Remotes.MeleeAttacked:FireServer(equipped, 1)
+        end
+        
+        task.wait() -- ทำงานไวเท่าที่เซิร์ฟเวอร์จะรับได้
+    end
+end
+
+-- เริ่มทำงาน
+task.spawn(function() attackNearestMonster("HumanoidRootPart") end)
+task.spawn(function() attackContinuously() end)
